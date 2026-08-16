@@ -1,10 +1,12 @@
 # ADR-002 — Domínio do projeto
 
 ## Status
+
 Aceita · 2026-08-16 · Equipe 07
 
 ## Contexto
-A equipe (Diego Marques, Julio Fernandes, Gabriel Yuji, Lucas Lisboa e William Tavares)
+
+A equipe (Diego Marques, Julio Fernandes, Gabriel Yuji, Lucas Lisboa, William Tavares e João Vítor Vieira)
 discutiu coletivamente e escolheu o domínio de agendamento de salão de beleza por ser um
 processo de negócio real e reconhecível, com estrutura rica o suficiente para sustentar os
 conceitos de arquitetura reativa e orientada a eventos trabalhados na disciplina — em
@@ -21,6 +23,7 @@ Escolhemos este domínio agora porque ele nasce de um processo que já existe in
 fluxo orientado a eventos expõe naturalmente os quatro elementos que a disciplina exige.
 
 ## Decisão
+
 O cliente solicita um horário; o sistema verifica disponibilidade e prioridade (ex.: plano
 do cliente, urgência do atendimento) e confirma ou recusa a reserva; a confirmação exige o
 pagamento de um sinal via gateway externo. Se o cliente cancela dentro do prazo, o sinal é
@@ -28,6 +31,7 @@ estornado; se não comparece (no-show), uma multa é cobrada. Periodicamente o s
 projeções de ocupação e relatórios de falta para o negócio.
 
 Como o domínio atende cada um dos quatro critérios:
+
 - **ponto de decisão com regra de negócio**: confirmar, recusar por conflito de horário, ou
   priorizar a reserva conforme urgência/plano do cliente
 - **sistema externo**: gateway de pagamento (cobrança do sinal) e serviço de notificação
@@ -38,6 +42,7 @@ Como o domínio atende cada um dos quatro critérios:
   faltas, construídos a partir do histórico de eventos
 
 ## Alternativas consideradas
+
 - **Cadastro simples de clientes/serviços (CRUD)**: descartado por não ter ponto de decisão
   real nem caminho de compensação — é transporte de dados, não um processo de negócio.
 - **Pedido → estoque (Mercado Rápido)**: descartado por ser o recorte que a demonstração
@@ -48,6 +53,7 @@ Como o domínio atende cada um dos quatro critérios:
   nem Event Sourcing nas aulas seguintes.
 
 ## Consequências aceitas
+
 - Vamos ter que modelar o conceito de "prioridade" de forma explícita no evento de reserva
   (ex.: plano do cliente, urgência), o que aumenta a complexidade do agregado desde já.
 - O fluxo de sinal/estorno cria dependência de um gateway de pagamento externo — na aula 05,
