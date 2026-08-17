@@ -1,8 +1,39 @@
-## Aula 02 - Validação de execução
+# Aula 02 — Entrega da Equipe 07
 
 Data da validação: 2026-08-16
 
-### Integrantes
+## O que foi feito nesta etapa
+ 
+- Escolha do domínio do projeto — **agendamento de salão de beleza** — e registro da
+  decisão em ADR-002, com os quatro critérios da atividade endereçados e justificados.
+- Modelagem do evento `AgendamentoConfirmadoEvent`: imutável, com `eventoId` próprio,
+  separado do `agendamentoId`, e datas em ISO-8601.
+- Implementação do publisher no `servico-agendamentos`: endpoint HTTP que confirma um
+  agendamento e publica o evento no tópico `salao.agendamento-confirmado`, com envelope
+  CloudEvents 1.0 completo e chave de partição por `agendamentoId`.
+- Implementação do consumidor idempotente no `servico-ocupacao`: deduplicação por
+  `eventoId`, efeito de negócio e registro de deduplicação no mesmo commit, ACK após o
+  processamento, e tolerância a campos desconhecidos no payload.
+- Infraestrutura local via Docker Compose: Zookeeper, Kafka, Postgres e os dois serviços
+  da aplicação, com as tabelas `eventos_processados` e `projecao_ocupacao` criadas
+  automaticamente na subida via script de inicialização do Postgres.
+- Testes automatizados cobrindo publisher, consumidor e o cenário de reentrega do mesmo
+  evento três vezes, comprovando efeito único.
+- Registro das interações com IA ao longo da semana, incluindo recusas justificadas.
+
+## Onde está cada coisa
+ 
+| O quê | Onde |
+|---|---|
+| Domínio e decisão de arquitetura | [`docs/adr/ADR-002-dominio-do-projeto.md`](../adr/ADR-002-dominio-do-projeto.md) |
+| Registro de uso de IA | [`docs/IA.md`](../IA.md) |
+| Infraestrutura (Zookeeper, Kafka, Postgres, serviços) | [`docker-compose.yml`](../../docker-compose.yml) |
+| Script de criação das tabelas | [`docker/postgres-init/init.sql`](../../docker/postgres-init/init.sql) |
+| Evento e publisher | [`servico-agendamentos/`](../../servico-agendamentos) |
+| Consumidor idempotente | [`servico-ocupacao/`](../../servico-ocupacao) |
+| Identificação da equipe e como rodar (visão geral) | [`README.md`](../../README.md) |
+
+## Integrantes
 
 - Diego Cardoso Marques
 - Gabriel Yuji Yasuda Cardoso
@@ -11,7 +42,7 @@ Data da validação: 2026-08-16
 - Lucas Gabriel Lisboa Alves
 - William Tavares de Moura
 
-### O que foi validado
+## O que foi validado
 
 - Docker Compose funcionando.
 - Kafka funcionando.
@@ -20,12 +51,13 @@ Data da validação: 2026-08-16
 - Padrões da Seção 12 atendidos.
 - Checklist da Seção 5 conferido.
 
-### Como executar
+## Como executar
 
 #### 0. Subir tudo pela raiz com broker compartilhado
 
 ```bash
-cd /home/gabriel-yuji/dev/aed-2026-2-equipe-07
+git clone <url-do-repositorio>
+cd aed-2026-2-equipe-07
 docker-compose up -d --build
 ```
 
