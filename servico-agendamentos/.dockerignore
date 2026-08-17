@@ -1,0 +1,6 @@
+target
+.m2
+.git
+.idea
+.vscode
+*.iml
