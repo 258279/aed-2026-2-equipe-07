@@ -2,7 +2,7 @@
  
 ### Líder: João Vítor Vieira Martins
  
-### Integrantes
+### Integrantes:
  
 (254801) - Diego Cardoso Marques
  
@@ -16,9 +16,8 @@
  
 (255180) - William Tavares de Moura
 
-## (O domínio em uma frase)
-
-##
+## Domínio
+Agendamento de horários em salão de beleza, com confirmação, cobrança de sinal e controle de ocupação dos profissionais via eventos.
 
 ## Como subir (ambiente com Docker Compose)
 
