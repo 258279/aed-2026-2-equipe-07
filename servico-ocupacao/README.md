@@ -30,3 +30,5 @@ Observações:
 
 - O `docker/postgres-init/init.sql` (raiz do repositório) cria as tabelas necessárias para idempotência e projeção.
 - Para integração completa com os outros serviços, use o `docker-compose.yml` na raiz do repositório.
+- O serviço executa dois consumidores Kafka no mesmo tópico `salao.agendamento-confirmado`: o consumidor idempotente da Etapa 1 e o agregador por janela de 15 minutos com `group.id` próprio.
+- O resultado do agregador fica disponível na tabela `agregacao_confirmacoes_por_janela`.

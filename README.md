@@ -1,22 +1,23 @@
 # Equipe 07
- 
+
 ### Líder: João Vítor Vieira Martins
- 
+
 ### Integrantes:
- 
+
 (254801) - Diego Cardoso Marques
- 
+
 (254428) - Gabriel Yuji Yasuda Cardoso
- 
+
 (258850) - João Vítor Vieira Martins
- 
+
 (255323) - Júlio César Fernandes
- 
+
 (258279) - Lucas Gabriel Lisboa Alves
- 
+
 (255180) - William Tavares de Moura
 
 ## Domínio
+
 Agendamento de horários em salão de beleza, com confirmação, cobrança de sinal e controle de ocupação dos profissionais via eventos.
 
 ## Como subir (ambiente com Docker Compose)
@@ -43,3 +44,27 @@ Verificações rápidas:
 - Servico Ocupacao: `http://localhost:8081`
 
 O Postgres é inicializado com as tabelas necessárias via `docker/postgres-init/init.sql`.
+
+## Consumidor adicional da Aula 03
+
+O `servico-ocupacao` passou a executar dois consumidores Kafka no mesmo tópico `salao.agendamento-confirmado`:
+
+- o consumidor da Etapa 1, responsável pela projeção de ocupação por agendamento;
+- o novo agregador por janela de 15 minutos, com `group.id` próprio (`servico-ocupacao-agregacao-janelas`).
+
+Para subir tudo com o novo agregador, continue usando o mesmo comando da raiz:
+
+```bash
+docker-compose up --build
+```
+
+Como observar o resultado da agregação:
+
+```sql
+SELECT janela_inicio, janela_fim, prioridade, quantidade_confirmacoes
+FROM agregacao_confirmacoes_por_janela
+ORDER BY janela_inicio, prioridade;
+```
+
+As datas do evento continuam em ISO-8601 com offset, e a janela do agregador é derivada de
+`ocorridoEm`.
