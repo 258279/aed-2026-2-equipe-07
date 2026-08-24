@@ -38,7 +38,7 @@ Data da validação: 2026-08-16
 - Diego Cardoso Marques
 - Gabriel Yuji Yasuda Cardoso
 - João Vítor Vieira Martins
-- Júlio César Fernandes
+- Júlio César Fernandes 
 - Lucas Gabriel Lisboa Alves
 - William Tavares de Moura
 
