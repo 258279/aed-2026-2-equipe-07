@@ -68,3 +68,30 @@ ORDER BY janela_inicio, prioridade;
 
 As datas do evento continuam em ISO-8601 com offset, e a janela do agregador é derivada de
 `ocorridoEm`.
+
+## Resiliência: retry, DLQ e reprocessamento
+
+O `servico-ocupacao` trata falha de processamento nos dois consumidores (o da Etapa 1 e o
+agregador por janela):
+
+- até 3 tentativas com backoff exponencial (1s, 2s, 4s) para falhas transientes (ex: banco
+  fora do ar);
+- erro de parsing do JSON (mensagem malformada) vai direto para a fila morta, sem gastar
+  tentativas de retry;
+- depois de esgotar as tentativas, a mensagem vai para um tópico de DLQ próprio de cada
+  consumidor:
+  - `salao.agendamento-confirmado.dlq.servico-ocupacao`
+  - `salao.agendamento-confirmado.dlq.servico-ocupacao-agregacao-janelas`
+
+Para reprocessar manualmente o que está numa DLQ (depois de corrigir a causa raiz):
+
+```bash
+curl -X POST http://localhost:8081/admin/dlq/ocupacao/reprocessar
+curl -X POST http://localhost:8081/admin/dlq/janela/reprocessar
+```
+
+Cada chamada devolve `{"reprocessados": N}`. Se a DLQ tiver mais mensagens do que uma chamada
+consegue drenar de uma vez, chame de novo até a resposta vir com `0`.
+
+Esse endpoint não tem autenticação — é uma superfície de administração para uso local/operacional,
+não algo pra expor assim num ambiente real.

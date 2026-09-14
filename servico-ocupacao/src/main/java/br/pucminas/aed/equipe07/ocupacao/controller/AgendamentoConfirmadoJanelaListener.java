@@ -27,6 +27,7 @@ public class AgendamentoConfirmadoJanelaListener {
     @KafkaListener(
             topics = "salao.agendamento-confirmado",
             groupId = GRUPO,
+            containerFactory = "janelaContainerFactory",
             ackMode = "MANUAL_IMMEDIATE"
     )
     public void receber(

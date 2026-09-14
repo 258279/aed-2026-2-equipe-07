@@ -25,6 +25,7 @@ public class AgendamentoConfirmadoListener {
     @KafkaListener(
             topics = "salao.agendamento-confirmado",
             groupId = "servico-ocupacao",
+            containerFactory = "ocupacaoContainerFactory",
             ackMode = "MANUAL_IMMEDIATE"
     )
     public void receber(

@@ -180,3 +180,75 @@ consumidor com group.id separado, consumindo o mesmo tópico da Etapa 1.
 - **Somente log como saída**: um log ajuda na inspeção manual, mas não sustenta consulta
   histórica nem validação simples da projeção. A equipe optou por persistir a agregação em
   PostgreSQL, mantendo o resultado observável e recuperável depois.
+
+---
+
+### Interação 5 — Retry, backoff, DLQ e reprocessamento
+
+**O que foi pedido:** implementar retry com backoff exponencial, envio para uma Dead Letter
+Topic e um mecanismo de reprocessamento manual, para os dois consumidores Kafka do
+`servico-ocupacao` (o da Etapa 1 e o agregador por janela).
+
+**O que a ferramenta sugeriu:**
+
+```java
+ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(NUMERO_DE_TENTATIVAS);
+backOff.setInitialInterval(INTERVALO_INICIAL_MS);
+backOff.setMultiplier(MULTIPLICADOR);
+
+DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+        kafkaTemplate,
+        (record, ex) -> new TopicPartition(topicoOriginal + ".dlq." + groupId, -1)
+);
+
+DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+errorHandler.addNotRetryableExceptions(JacksonException.class);
+```
+
+Antes de qualquer código, a ferramenta levantou quatro decisões em aberto e apresentou opções
+com trade-offs para cada uma, em vez de decidir sozinha: como classificar mensagem malformada
+(retry igual às outras falhas, ou direto pra DLQ), estratégia de backoff (fixo ou exponencial),
+como reprocessar a DLQ (endpoint manual, job agendado automático, ou só documentar o comando de
+console do Kafka) e como nomear o(s) tópico(s) de DLQ (um único compartilhado, ou um por
+consumidor). A implementação final usa um `DefaultErrorHandler` por `containerFactory` (um por
+group.id), 3 tentativas com backoff 1s/2s/4s, e um `DlqReprocessamentoService` com um
+`KafkaConsumer` avulso em group.id dedicado (`<group-id>-dlq-reprocessador`) exposto por um
+`DlqController` (`POST /admin/dlq/{consumidor}/reprocessar`).
+
+**O que foi aceito:** a estratégia geral (`DefaultErrorHandler` + `ExponentialBackOffWithMaxRetries`
++ `DeadLetterPublishingRecoverer`, um por consumidor), backoff exponencial em vez de fixo (mais
+gentil com uma dependência se recuperando), 3 tentativas antes de desistir, e um endpoint
+administrativo único cobrindo os dois consumidores por meio de um parâmetro de rota.
+
+**O que foi recusado, e por quê:**
+
+- **Tratar mensagem malformada igual a qualquer outra falha (retry com backoff):** um erro de
+  parsing de JSON é determinístico — a mesma mensagem malformada vai falhar da mesma forma na
+  1ª, na 2ª e na 4ª tentativa, porque o problema é o conteúdo da mensagem, não uma dependência
+  externa instável. Gastar os 3 retries (7s de backoff) nesse caso só atrasa a chegada na DLQ
+  sem nenhuma chance real de sucesso. A equipe optou por classificar erro de parsing como não
+  retentável (`addNotRetryableExceptions`), reservando o orçamento de retry só para falhas que
+  podem mesmo se resolver sozinhas (ex: banco indisponível).
+- **Reprocessamento automático da DLQ, via job agendado:** a ferramenta apresentou essa opção
+  como alternativa ao endpoint manual. Foi recusada porque reprocessar automaticamente uma
+  mensagem que já falhou pode recolocá-la em loop de falha indefinidamente se a causa raiz
+  (o bug que a fez cair na DLQ) ainda não tiver sido corrigida — sem um humano no meio, o
+  sistema ficaria tentando reprocessar o mesmo erro sem parar. A decisão da equipe foi manter o
+  reprocessamento sob controle humano explícito (`POST /admin/dlq/{consumidor}/reprocessar`),
+  chamado só depois de confirmar que a causa raiz foi corrigida.
+- **Um único tópico de DLQ compartilhado entre os dois consumidores:** mais simples de operar
+  (um lugar só pra olhar), mas mistura as falhas de dois processamentos independentes na mesma
+  fila. Como os dois consumidores (`servico-ocupacao` e `servico-ocupacao-agregacao-janelas`)
+  têm donos e causas de falha diferentes, um DLQ compartilhado dificultaria saber qual consumidor
+  quebrou e reprocessar cada um separadamente. A equipe optou por um tópico de DLQ por
+  consumidor (`<tópico-original>.dlq.<group-id>`), mesmo custando um pouco mais de operação.
+- **`DlqReprocessamentoService` sem `enable.auto.commit=false` explícito:** a primeira versão
+  gerada pela ferramenta criava o `KafkaConsumer` avulso do reprocessador sem desligar o
+  auto-commit do Kafka. A equipe revisou o código e percebeu que, como o padrão do Kafka é
+  `enable.auto.commit=true` a cada 5s, o offset da DLQ podia ser commitado automaticamente antes
+  (ou independentemente) da republicação no tópico original ter sido de fato confirmada — se o
+  processo caísse nesse intervalo, a mensagem seria dada como consumida da DLQ sem nunca ter sido
+  republicada, uma perda silenciosa de dado. Foi recusada e corrigida desligando o auto-commit,
+  mantendo como único commit o `commitSync()` explícito, chamado só depois que todas as
+  republicações da leva já haviam sido confirmadas — a equipe preferiu essa garantia mesmo sem
+  o pedido original ter especificado esse detalhe.
