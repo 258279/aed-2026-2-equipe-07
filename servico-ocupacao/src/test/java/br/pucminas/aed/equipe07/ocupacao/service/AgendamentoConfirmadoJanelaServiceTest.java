@@ -32,7 +32,15 @@ class AgendamentoConfirmadoJanelaServiceTest {
                 )
                 """);
 
+        banco.execute("""
+            CREATE TABLE IF NOT EXISTS eventos_processados_agregacao_janela (
+                evento_id VARCHAR(100) PRIMARY KEY,
+                processado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """);
+
         banco.update("DELETE FROM agregacao_confirmacoes_por_janela");
+        banco.update("DELETE FROM eventos_processados_agregacao_janela");
     }
 
     @Test
@@ -114,6 +122,33 @@ class AgendamentoConfirmadoJanelaServiceTest {
                 Integer.class,
                 "2026-08-16T11:45:00-03:00",
                 "PADRAO"
+        );
+
+        assertEquals(1, quantidadeConfirmacoes);
+    }
+
+    @Test
+    void naoDeveContarDuasVezesQuandoOMesmoEventoEReentregue() {
+
+        AgendamentoConfirmadoEventDetalhado evento =
+                new AgendamentoConfirmadoEventDetalhado(
+                        "EVT-200", "AG-200", "PROF-200", "SERV-200",
+                        "2026-08-22T14:00:00-03:00", "URGENTE",
+                        "2026-08-16T12:07:00-03:00"
+                );
+
+        service.processar(evento);
+        service.processar(evento); // reentrega simulada
+
+        Integer quantidadeConfirmacoes = banco.queryForObject(
+                """
+                SELECT quantidade_confirmacoes
+                FROM agregacao_confirmacoes_por_janela
+                WHERE janela_inicio = ? AND prioridade = ?
+                """,
+                Integer.class,
+                "2026-08-16T12:00:00-03:00",
+                "URGENTE"
         );
 
         assertEquals(1, quantidadeConfirmacoes);

@@ -25,6 +25,11 @@ public class AgendamentoConfirmadoJanelaService {
         @Transactional
     public void processar(AgendamentoConfirmadoEventDetalhado evento) {
 
+        if (repository.eventoJaProcessado(evento.getEventoId())) {
+            return;
+        }
+        repository.registrarEventoProcessado(evento.getEventoId());
+
         OffsetDateTime ocorridoEm = OffsetDateTime.parse(evento.getOcorridoEm());
         OffsetDateTime inicioDaJanela = inicioDaJanela(ocorridoEm);
         OffsetDateTime fimDaJanela = inicioDaJanela.plusMinutes(TAMANHO_DA_JANELA_EM_MINUTOS);

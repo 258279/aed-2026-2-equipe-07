@@ -18,3 +18,8 @@ CREATE TABLE IF NOT EXISTS agregacao_confirmacoes_por_janela (
     atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (janela_inicio, prioridade)
 );
+
+CREATE TABLE IF NOT EXISTS eventos_processados_agregacao_janela (
+    evento_id VARCHAR(100) PRIMARY KEY,
+    processado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

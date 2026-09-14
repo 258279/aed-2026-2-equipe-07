@@ -63,4 +63,27 @@ public class AgendamentoConfirmadoJanelaRepository {
 
         return quantidade != null ? quantidade : 0;
     }
+
+    public boolean eventoJaProcessado(String eventoId) {
+        Integer quantidade = banco.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM eventos_processados_agregacao_janela
+                WHERE evento_id = ?
+                """,
+                Integer.class,
+                eventoId
+        );
+        return quantidade != null && quantidade > 0;
+    }
+
+    public void registrarEventoProcessado(String eventoId) {
+        banco.update(
+                """
+                INSERT INTO eventos_processados_agregacao_janela (evento_id)
+                VALUES (?)
+                """,
+                eventoId
+        );
+    }
 }
