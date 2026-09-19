@@ -74,3 +74,52 @@ consumidores.
   "ocorridoEm": "2026-08-16T12:30:00-03:00"
 }
 ```
+
+---
+
+# Contrato do evento `salao.agendamento.cancelado-por-conflito.v1`
+
+Este evento representa a compensacao do fluxo de confirmacao quando o `servico-ocupacao`
+detecta que o mesmo profissional ja possui outro agendamento no mesmo horario.
+
+Nao e comando e nao pede acao futura: e um fato consumado de compensacao, no particpio,
+publicado como novo evento sem `UPDATE`/`DELETE` no log.
+
+## Topico
+
+- topico principal: `salao.agendamento-cancelado-por-conflito`
+- DLQ da compensacao no `servico-agendamentos`: `salao.agendamento-cancelado-por-conflito.dlq.servico-agendamentos-compensacao`
+
+## Campos do payload
+
+| Campo            | Tipo   | Obrigatorio | Significado |
+| ---------------- | ------ | ----------- | ----------- |
+| `eventoId`       | string | sim         | Identidade do evento de compensacao. Tambem e usada para idempotencia de consumo. |
+| `agendamentoId`  | string | sim         | Agendamento que foi compensado por conflito de horario. |
+| `profissionalId` | string | sim         | Profissional cuja agenda apresentou conflito no mesmo horario. |
+| `inicioEm`       | string | sim         | Horario reservado que entrou em conflito, em ISO-8601 com offset. |
+| `motivo`         | string | sim         | Motivo de negocio da compensacao, para rastreabilidade e operacao. |
+| `ocorridoEm`     | string | sim         | Instante em que a compensacao foi emitida, em ISO-8601 com offset. |
+
+## Headers e rastreabilidade
+
+O produtor publica CloudEvents (`ce_id`, `ce_type`, `ce_source`, `ce_time`, `ce_specversion`).
+
+No caminho de falha para DLQ, os headers originais sao preservados e o erro tambem fica
+registrado em headers tecnicos do Spring Kafka (`kafka_dlt-*`).
+
+No reprocessamento manual de DLQ, os headers da mensagem sao republicados junto com o
+payload original.
+
+## Exemplo de payload
+
+```json
+{
+  "eventoId": "COMP-EVT-20260922-0001",
+  "agendamentoId": "AG-20260922-0142",
+  "profissionalId": "PROF-102",
+  "inicioEm": "2026-09-22T10:00:00-03:00",
+  "motivo": "Conflito de horario para o profissional no instante solicitado",
+  "ocorridoEm": "2026-09-22T09:15:32-03:00"
+}
+```

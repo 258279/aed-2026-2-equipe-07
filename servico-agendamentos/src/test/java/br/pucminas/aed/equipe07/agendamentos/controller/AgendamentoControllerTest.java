@@ -1,6 +1,7 @@
 package br.pucminas.aed.equipe07.agendamentos.controller;
 
 import br.pucminas.aed.equipe07.agendamentos.domain.AgendamentoConfirmadoEvent;
+import br.pucminas.aed.equipe07.agendamentos.service.AgendamentoStatusService;
 import br.pucminas.aed.equipe07.agendamentos.service.AgendamentoService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -13,7 +14,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class AgendamentoControllerTest {
@@ -22,9 +26,10 @@ class AgendamentoControllerTest {
     void deveResponderAcceptedAoDispararConfirmacao() {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service);
+                new AgendamentoController(service, statusService);
 
         AgendamentoConfirmadoEvent evento =
                 new AgendamentoConfirmadoEvent(
@@ -52,9 +57,10 @@ class AgendamentoControllerTest {
     void deveReceberConfirmacaoPorHttpEResponderAccepted() throws Exception {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service);
+                new AgendamentoController(service, statusService);
 
         MockMvc mockMvc =
                 MockMvcBuilders
@@ -100,5 +106,28 @@ class AgendamentoControllerTest {
                 "AG-001",
                 eventoRecebido.getAgendamentoId()
         );
+    }
+
+    @Test
+    void deveConsultarStatusAtualDoAgendamento() throws Exception {
+
+        AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
+
+        when(statusService.consultarStatus("AG-777")).thenReturn("CANCELADO_POR_CONFLITO");
+
+        AgendamentoController controller =
+                new AgendamentoController(service, statusService);
+
+        MockMvc mockMvc =
+                MockMvcBuilders
+                        .standaloneSetup(controller)
+                        .build();
+
+        mockMvc.perform(get("/agendamentos/AG-777/status"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"agendamentoId":"AG-777","status":"CANCELADO_POR_CONFLITO"}
+                        """));
     }
 }

@@ -24,12 +24,13 @@ class AgendamentoServiceTest {
 
         KafkaTemplate<String, AgendamentoConfirmadoEvent> clienteDoBroker =
                 mock(KafkaTemplate.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
 
         when(clienteDoBroker.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
         AgendamentoService service =
-                new AgendamentoService(clienteDoBroker);
+                new AgendamentoService(clienteDoBroker, statusService);
 
         AgendamentoConfirmadoEvent evento =
                 new AgendamentoConfirmadoEvent(
@@ -49,6 +50,7 @@ class AgendamentoServiceTest {
                 ArgumentCaptor.forClass(ProducerRecord.class);
 
         verify(clienteDoBroker).send(captor.capture());
+        verify(statusService).marcarConfirmado("AG-001");
 
         ProducerRecord<String, AgendamentoConfirmadoEvent> registro =
                 captor.getValue();

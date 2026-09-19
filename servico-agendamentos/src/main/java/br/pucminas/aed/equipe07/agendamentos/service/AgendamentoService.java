@@ -16,15 +16,20 @@ public class AgendamentoService {
     private static final String TOPICO = "salao.agendamento-confirmado";
 
     private final KafkaTemplate<String, AgendamentoConfirmadoEvent> clienteDoBroker;
+        private final AgendamentoStatusService statusService;
 
     public AgendamentoService(
-            KafkaTemplate<String, AgendamentoConfirmadoEvent> clienteDoBroker) {
+                        KafkaTemplate<String, AgendamentoConfirmadoEvent> clienteDoBroker,
+                        AgendamentoStatusService statusService) {
 
         this.clienteDoBroker = clienteDoBroker;
+                this.statusService = statusService;
     }
 
     public CompletableFuture<SendResult<String, AgendamentoConfirmadoEvent>>
     publicarConfirmacao(AgendamentoConfirmadoEvent evento) {
+
+                statusService.marcarConfirmado(evento.getAgendamentoId());
 
         RecordHeaders headers = new RecordHeaders();
 

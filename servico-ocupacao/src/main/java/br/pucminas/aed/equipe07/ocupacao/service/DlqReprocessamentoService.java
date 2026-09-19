@@ -4,6 +4,9 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -86,8 +89,18 @@ public class DlqReprocessamentoService {
     private void republicar(ConsumerRecord<Object, Object> registro) {
 
         try {
+            ProducerRecord<Object, Object> republicacao =
+                new ProducerRecord<>(
+                    TOPICO_ORIGINAL,
+                    null,
+                    registro.timestamp(),
+                    registro.key(),
+                    registro.value(),
+                    copiarHeaders(registro)
+                );
+
             kafkaTemplate
-                    .send(TOPICO_ORIGINAL, registro.key(), registro.value())
+                .send(republicacao)
                     .get(5, TimeUnit.SECONDS);
 
         } catch (InterruptedException e) {
@@ -97,5 +110,16 @@ public class DlqReprocessamentoService {
         } catch (ExecutionException | TimeoutException e) {
             throw new IllegalStateException("Falha ao republicar mensagem da DLQ", e);
         }
+    }
+
+    private RecordHeaders copiarHeaders(ConsumerRecord<Object, Object> registro) {
+
+        RecordHeaders headers = new RecordHeaders();
+
+        for (Header header : registro.headers()) {
+            headers.add(header);
+        }
+
+        return headers;
     }
 }

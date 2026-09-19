@@ -1,4 +1,4 @@
-package br.pucminas.aed.equipe07.ocupacao.config;
+package br.pucminas.aed.equipe07.agendamentos.config;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -15,46 +15,29 @@ import tools.jackson.core.JacksonException;
 @Configuration
 public class KafkaConfig {
 
-    private static final String TOPICO_ORIGINAL = "salao.agendamento-confirmado";
+    private static final String TOPICO_COMPENSACAO = "salao.agendamento-cancelado-por-conflito";
     private static final int NUMERO_DE_TENTATIVAS = 3;
     private static final long INTERVALO_INICIAL_MS = 1000L;
     private static final double MULTIPLICADOR = 2.0;
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<Object, Object> ocupacaoContainerFactory(
+    public ConcurrentKafkaListenerContainerFactory<Object, Object> compensacaoContainerFactory(
             ConsumerFactory<Object, Object> consumerFactory,
             KafkaTemplate<Object, Object> kafkaTemplate) {
-
-        return criarFactory(consumerFactory, kafkaTemplate, "servico-ocupacao");
-    }
-
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<Object, Object> janelaContainerFactory(
-            ConsumerFactory<Object, Object> consumerFactory,
-            KafkaTemplate<Object, Object> kafkaTemplate) {
-
-        return criarFactory(consumerFactory, kafkaTemplate, "servico-ocupacao-agregacao-janelas");
-    }
-
-    private ConcurrentKafkaListenerContainerFactory<Object, Object> criarFactory(
-            ConsumerFactory<Object, Object> consumerFactory,
-            KafkaTemplate<Object, Object> kafkaTemplate,
-            String groupId) {
 
         ConcurrentKafkaListenerContainerFactory<Object, Object> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(consumerFactory);
-        factory.setCommonErrorHandler(criarErrorHandler(kafkaTemplate, groupId));
+        factory.setCommonErrorHandler(criarErrorHandler(kafkaTemplate));
 
         return factory;
     }
 
     private DefaultErrorHandler criarErrorHandler(
-            KafkaTemplate<Object, Object> kafkaTemplate,
-            String groupId) {
+            KafkaTemplate<Object, Object> kafkaTemplate) {
 
-        String topicoDlq = TOPICO_ORIGINAL + ".dlq." + groupId;
+        String topicoDlq = TOPICO_COMPENSACAO + ".dlq.servico-agendamentos-compensacao";
 
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 kafkaTemplate,

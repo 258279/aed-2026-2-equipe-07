@@ -3,6 +3,7 @@ package br.pucminas.aed.equipe07.ocupacao.service;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,7 @@ import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,8 +67,15 @@ class DlqReprocessamentoServiceIT {
 
         String json = "{\"eventoId\":\"EVT-REPROC-001\"}";
 
-        kafkaTemplate.send("salao.agendamento-confirmado.dlq.servico-ocupacao", "AG-REPROC-001", json)
-                .join();
+        ProducerRecord<Object, Object> registroDlq =
+            new ProducerRecord<>(
+                "salao.agendamento-confirmado.dlq.servico-ocupacao",
+                "AG-REPROC-001",
+                json
+            );
+        registroDlq.headers().add("ce_id", "EVT-REPROC-001".getBytes(StandardCharsets.UTF_8));
+
+        kafkaTemplate.send(registroDlq).join();
 
         int reprocessados = service.reprocessar("servico-ocupacao");
 
@@ -83,6 +92,7 @@ class DlqReprocessamentoServiceIT {
 
         assertNotNull(registro);
         assertEquals(json, registro.value());
+        assertEquals("EVT-REPROC-001", headerAsString(registro, "ce_id"));
 
         consumidorOriginal.close();
     }
@@ -109,5 +119,9 @@ class DlqReprocessamentoServiceIT {
         broker.consumeFromAnEmbeddedTopic(consumer, topico);
 
         return consumer;
+    }
+
+    private String headerAsString(ConsumerRecord<String, String> registro, String nome) {
+        return new String(registro.headers().lastHeader(nome).value(), StandardCharsets.UTF_8);
     }
 }
