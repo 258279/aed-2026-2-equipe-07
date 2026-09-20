@@ -11,3 +11,10 @@ CREATE TABLE IF NOT EXISTS agendamento_eventos (
     gravado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (agendamento_id, versao)
 );
+
+CREATE TABLE IF NOT EXISTS relatorio_faltas_estornos (
+    data VARCHAR(10) NOT NULL,
+    tipo VARCHAR(20) NOT NULL,
+    quantidade INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (data, tipo)
+);
