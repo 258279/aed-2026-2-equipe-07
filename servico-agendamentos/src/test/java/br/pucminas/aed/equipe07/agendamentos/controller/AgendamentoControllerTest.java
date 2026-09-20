@@ -1,7 +1,9 @@
 package br.pucminas.aed.equipe07.agendamentos.controller;
 
 import br.pucminas.aed.equipe07.agendamentos.domain.AgendamentoConfirmadoEvent;
+import br.pucminas.aed.equipe07.agendamentos.service.AgendamentoCicloDeVidaService;
 import br.pucminas.aed.equipe07.agendamentos.service.AgendamentoService;
+import br.pucminas.aed.equipe07.agendamentos.service.ConflitoDeVersaoException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
@@ -11,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,29 +25,20 @@ class AgendamentoControllerTest {
     void deveResponderAcceptedAoDispararConfirmacao() {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service);
+                new AgendamentoController(service, cicloDeVidaService);
 
         AgendamentoConfirmadoEvent evento =
                 new AgendamentoConfirmadoEvent(
-                        "EVT-001",
-                        "AG-001",
-                        "PROF-018",
-                        "SERV-004",
-                        "2026-08-20T14:00:00-03:00",
-                        "PADRAO",
-                        "2026-08-16T12:30:00-03:00"
+                        "EVT-001", "AG-001", "PROF-018", "SERV-004",
+                        "2026-08-20T14:00:00-03:00", "PADRAO", "2026-08-16T12:30:00-03:00"
                 );
 
-        ResponseEntity<Void> resposta =
-                controller.publicarConfirmacao(evento);
+        ResponseEntity<Void> resposta = controller.publicarConfirmacao(evento);
 
-        assertEquals(
-                HttpStatus.ACCEPTED,
-                resposta.getStatusCode()
-        );
-
+        assertEquals(HttpStatus.ACCEPTED, resposta.getStatusCode());
         verify(service).publicarConfirmacao(evento);
     }
 
@@ -52,14 +46,12 @@ class AgendamentoControllerTest {
     void deveReceberConfirmacaoPorHttpEResponderAccepted() throws Exception {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service);
+                new AgendamentoController(service, cicloDeVidaService);
 
-        MockMvc mockMvc =
-                MockMvcBuilders
-                        .standaloneSetup(controller)
-                        .build();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
 
         String json = """
                 {
@@ -81,24 +73,75 @@ class AgendamentoControllerTest {
                 .andExpect(status().isAccepted());
 
         ArgumentCaptor<AgendamentoConfirmadoEvent> captor =
-                ArgumentCaptor.forClass(
-                        AgendamentoConfirmadoEvent.class
-                );
+                ArgumentCaptor.forClass(AgendamentoConfirmadoEvent.class);
 
-        verify(service)
-                .publicarConfirmacao(captor.capture());
+        verify(service).publicarConfirmacao(captor.capture());
 
-        AgendamentoConfirmadoEvent eventoRecebido =
-                captor.getValue();
+        assertEquals("EVT-001", captor.getValue().getEventoId());
+        assertEquals("AG-001", captor.getValue().getAgendamentoId());
+    }
 
-        assertEquals(
-                "EVT-001",
-                eventoRecebido.getEventoId()
-        );
+    @Test
+    void deveResponderOkAoCancelarComSucesso() {
 
-        assertEquals(
-                "AG-001",
-                eventoRecebido.getAgendamentoId()
-        );
+        AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
+
+        AgendamentoController controller =
+                new AgendamentoController(service, cicloDeVidaService);
+
+        ResponseEntity<Void> resposta = controller.cancelar("AG-001");
+
+        assertEquals(HttpStatus.OK, resposta.getStatusCode());
+        verify(cicloDeVidaService).cancelar("AG-001");
+    }
+
+    @Test
+    void deveResponderConflictAoCancelarUmAgendamentoEmEstadoInvalido() {
+
+        AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
+
+        doThrow(new IllegalStateException("já cancelado"))
+                .when(cicloDeVidaService).cancelar("AG-002");
+
+        AgendamentoController controller =
+                new AgendamentoController(service, cicloDeVidaService);
+
+        ResponseEntity<Void> resposta = controller.cancelar("AG-002");
+
+        assertEquals(HttpStatus.CONFLICT, resposta.getStatusCode());
+    }
+
+    @Test
+    void deveResponderConflictAoCancelarComConflitoDeVersao() {
+
+        AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
+
+        doThrow(new ConflitoDeVersaoException("conflito", null))
+                .when(cicloDeVidaService).cancelar("AG-003");
+
+        AgendamentoController controller =
+                new AgendamentoController(service, cicloDeVidaService);
+
+        ResponseEntity<Void> resposta = controller.cancelar("AG-003");
+
+        assertEquals(HttpStatus.CONFLICT, resposta.getStatusCode());
+    }
+
+    @Test
+    void deveResponderOkAoMarcarNaoComparecimentoComSucesso() {
+
+        AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
+
+        AgendamentoController controller =
+                new AgendamentoController(service, cicloDeVidaService);
+
+        ResponseEntity<Void> resposta = controller.marcarNaoComparecimento("AG-004");
+
+        assertEquals(HttpStatus.OK, resposta.getStatusCode());
+        verify(cicloDeVidaService).marcarNaoComparecimento("AG-004");
     }
 }
