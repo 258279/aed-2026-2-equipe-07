@@ -1,13 +1,17 @@
 package br.pucminas.aed.equipe07.agendamentos.service;
 
+import br.pucminas.aed.equipe07.agendamentos.domain.Agendamento;
 import br.pucminas.aed.equipe07.agendamentos.domain.AgendamentoConfirmadoEvent;
+import br.pucminas.aed.equipe07.agendamentos.domain.EventoAgendamento;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,8 +32,11 @@ class AgendamentoServiceTest {
         when(clienteDoBroker.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
+        AgendamentoEventStore eventStore = mock(AgendamentoEventStore.class);
+        JsonMapper jsonMapper = JsonMapper.builder().build();
+
         AgendamentoService service =
-                new AgendamentoService(clienteDoBroker);
+                new AgendamentoService(clienteDoBroker, eventStore, jsonMapper);
 
         AgendamentoConfirmadoEvent evento =
                 new AgendamentoConfirmadoEvent(
@@ -91,6 +98,26 @@ class AgendamentoServiceTest {
         assertEquals(
                 "2026-08-16T12:30:00-03:00",
                 valorDoHeader(registro, "ce_time")
+        );
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EventoAgendamento>> captorEventos =
+                ArgumentCaptor.forClass(List.class);
+
+        verify(eventStore).gravar(captorEventos.capture());
+
+        List<EventoAgendamento> eventosGravados =
+                captorEventos.getValue();
+
+        assertEquals(1, eventosGravados.size());
+        assertEquals(
+                "AG-001",
+                eventosGravados.get(0).getAgendamentoId()
+        );
+        assertEquals(1, eventosGravados.get(0).getVersao());
+        assertEquals(
+                Agendamento.TIPO_CONFIRMADO,
+                eventosGravados.get(0).getTipoEvento()
         );
     }
 
