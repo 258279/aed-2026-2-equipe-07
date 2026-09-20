@@ -153,4 +153,42 @@ class AgendamentoConfirmadoJanelaServiceTest {
 
         assertEquals(1, quantidadeConfirmacoes);
     }
+
+    @Test
+    void deveManterAgregacaoConsistenteComDuasInstanciasCompartilhandoAProjecao() {
+
+        AgendamentoConfirmadoJanelaService primeiraInstancia =
+                new AgendamentoConfirmadoJanelaService(
+                        new AgendamentoConfirmadoJanelaRepository(banco));
+        AgendamentoConfirmadoJanelaService segundaInstancia =
+                new AgendamentoConfirmadoJanelaService(
+                        new AgendamentoConfirmadoJanelaRepository(banco));
+
+        AgendamentoConfirmadoEventDetalhado primeiroEvento =
+                new AgendamentoConfirmadoEventDetalhado(
+                        "EVT-300", "AG-300", "PROF-300", "SERV-300",
+                        "2026-08-22T14:00:00-03:00", "URGENTE",
+                        "2026-08-16T12:07:00-03:00");
+        AgendamentoConfirmadoEventDetalhado segundoEvento =
+                new AgendamentoConfirmadoEventDetalhado(
+                        "EVT-301", "AG-301", "PROF-301", "SERV-301",
+                        "2026-08-22T14:15:00-03:00", "URGENTE",
+                        "2026-08-16T12:09:00-03:00");
+
+        primeiraInstancia.processar(primeiroEvento);
+        segundaInstancia.processar(segundoEvento);
+
+        Integer quantidadeConfirmacoes = banco.queryForObject(
+                """
+                SELECT quantidade_confirmacoes
+                FROM agregacao_confirmacoes_por_janela
+                WHERE janela_inicio = ? AND prioridade = ?
+                """,
+                Integer.class,
+                "2026-08-16T12:00:00-03:00",
+                "URGENTE"
+        );
+
+        assertEquals(2, quantidadeConfirmacoes);
+    }
 }
