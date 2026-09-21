@@ -33,7 +33,7 @@ public class AgendamentoConfirmadoListener {
 A ferramenta também sugeriu adicionar retry automático com `@Retry` do Spring Retry.
 
 **O que foi aceito:** a estrutura básica do listener com `@KafkaListener`, a injeção do
-`OcupacaoService` por construtor, e a captura do header `ce_id` para rastreabilidade do
+`OcupacaoService` por construtor e a captura do header `ce_id` para rastreabilidade do
 evento no log.
 
 **O que foi recusado, e por quê:**
@@ -133,7 +133,7 @@ public class OcupacaoService {
 }
 ```
 
-A ferramenta também sugeriu configurar Resilience4j no `application.yml` com
+A ferramenta também sugeriu configurar o Resilience4j no `application.yml` com
 `failureRateThreshold = 50%`.
 
 **O que foi aceito:** a ideia geral do padrão Circuit Breaker como proteção contra falha em
@@ -177,7 +177,7 @@ consumidor com group.id separado, consumindo o mesmo tópico da Etapa 1.
   quando a confirmação aconteceu no salão, e não de quando o broker entregou a mensagem.
   Usar processamento introduziria distorção se a fila atrasasse, justamente o cenário que a
   agregação precisa medir.
-- **Somente log como saída**: um log ajuda na inspeção manual, mas não sustenta consulta
+- **Somente log como saída**: um log ajuda na inspeção manual, mas não sustenta uma consulta
   histórica nem validação simples da projeção. A equipe optou por persistir a agregação em
   PostgreSQL, mantendo o resultado observável e recuperável depois.
 
@@ -206,36 +206,38 @@ errorHandler.addNotRetryableExceptions(JacksonException.class);
 ```
 
 Antes de qualquer código, a ferramenta levantou quatro decisões em aberto e apresentou opções
-com trade-offs para cada uma, em vez de decidir sozinha: como classificar mensagem malformada
-(retry igual às outras falhas, ou direto pra DLQ), estratégia de backoff (fixo ou exponencial),
-como reprocessar a DLQ (endpoint manual, job agendado automático, ou só documentar o comando de
-console do Kafka) e como nomear o(s) tópico(s) de DLQ (um único compartilhado, ou um por
-consumidor). A implementação final usa um `DefaultErrorHandler` por `containerFactory` (um por
-group.id), 3 tentativas com backoff 1s/2s/4s, e um `DlqReprocessamentoService` com um
-`KafkaConsumer` avulso em group.id dedicado (`<group-id>-dlq-reprocessador`) exposto por um
+com trade-offs para cada uma, em vez de decidir sozinha: como classificar uma mensagem
+malformada (retry igual às outras falhas ou direto para a DLQ), estratégia de backoff (fixo ou
+exponencial), como reprocessar a DLQ (endpoint manual, job agendado automático ou apenas
+documentar o comando de console do Kafka) e como nomear o(s) tópico(s) de DLQ (um único
+compartilhado ou um por consumidor). A implementação final usa um `DefaultErrorHandler` por
+`containerFactory` (um por `group.id`), 3 tentativas com backoff 1s/2s/4s e um
+`DlqReprocessamentoService` com um `KafkaConsumer` avulso em `group.id` dedicado
+(`<group-id>-dlq-reprocessador`), exposto por um
 `DlqController` (`POST /admin/dlq/{consumidor}/reprocessar`).
 
-**O que foi aceito:** a estratégia geral (`DefaultErrorHandler` + `ExponentialBackOffWithMaxRetries`
-+ `DeadLetterPublishingRecoverer`, um por consumidor), backoff exponencial em vez de fixo (mais
-gentil com uma dependência se recuperando), 3 tentativas antes de desistir, e um endpoint
-administrativo único cobrindo os dois consumidores por meio de um parâmetro de rota.
+**O que foi aceito:** a estratégia geral (`DefaultErrorHandler` +
+`ExponentialBackOffWithMaxRetries` + `DeadLetterPublishingRecoverer`, um por consumidor),
+backoff exponencial em vez de fixo (mais gentil com uma dependência se recuperando), 3
+tentativas antes de desistir e um endpoint administrativo único cobrindo os dois consumidores
+por meio de um parâmetro de rota.
 
 **O que foi recusado, e por quê:**
 
-- **Tratar mensagem malformada igual a qualquer outra falha (retry com backoff):** um erro de
+- **Tratar uma mensagem malformada igual a qualquer outra falha (retry com backoff):** um erro de
   parsing de JSON é determinístico — a mesma mensagem malformada vai falhar da mesma forma na
   1ª, na 2ª e na 4ª tentativa, porque o problema é o conteúdo da mensagem, não uma dependência
-  externa instável. Gastar os 3 retries (7s de backoff) nesse caso só atrasa a chegada na DLQ
+  externa instável. Gastar os 3 retries (7s de backoff) nesse caso só atrasa a chegada à DLQ
   sem nenhuma chance real de sucesso. A equipe optou por classificar erro de parsing como não
   retentável (`addNotRetryableExceptions`), reservando o orçamento de retry só para falhas que
-  podem mesmo se resolver sozinhas (ex: banco indisponível).
-- **Reprocessamento automático da DLQ, via job agendado:** a ferramenta apresentou essa opção
+  podem mesmo se resolver sozinhas (por exemplo, banco indisponível).
+- **Reprocessamento automático da DLQ via job agendado:** a ferramenta apresentou essa opção
   como alternativa ao endpoint manual. Foi recusada porque reprocessar automaticamente uma
   mensagem que já falhou pode recolocá-la em loop de falha indefinidamente se a causa raiz
   (o bug que a fez cair na DLQ) ainda não tiver sido corrigida — sem um humano no meio, o
   sistema ficaria tentando reprocessar o mesmo erro sem parar. A decisão da equipe foi manter o
   reprocessamento sob controle humano explícito (`POST /admin/dlq/{consumidor}/reprocessar`),
-  chamado só depois de confirmar que a causa raiz foi corrigida.
+  chamado somente depois de confirmar que a causa raiz foi corrigida.
 - **Um único tópico de DLQ compartilhado entre os dois consumidores:** mais simples de operar
   (um lugar só pra olhar), mas mistura as falhas de dois processamentos independentes na mesma
   fila. Como os dois consumidores (`servico-ocupacao` e `servico-ocupacao-agregacao-janelas`)
@@ -246,9 +248,34 @@ administrativo único cobrindo os dois consumidores por meio de um parâmetro de
   gerada pela ferramenta criava o `KafkaConsumer` avulso do reprocessador sem desligar o
   auto-commit do Kafka. A equipe revisou o código e percebeu que, como o padrão do Kafka é
   `enable.auto.commit=true` a cada 5s, o offset da DLQ podia ser commitado automaticamente antes
-  (ou independentemente) da republicação no tópico original ter sido de fato confirmada — se o
-  processo caísse nesse intervalo, a mensagem seria dada como consumida da DLQ sem nunca ter sido
-  republicada, uma perda silenciosa de dado. Foi recusada e corrigida desligando o auto-commit,
-  mantendo como único commit o `commitSync()` explícito, chamado só depois que todas as
-  republicações da leva já haviam sido confirmadas — a equipe preferiu essa garantia mesmo sem
-  o pedido original ter especificado esse detalhe.
+  (ou independentemente) da republicação no tópico original ter sido de fato confirmada — se o processo caísse nesse intervalo, a mensagem seria dada como consumida da DLQ sem nunca ter sido republicada, uma perda silenciosa de dado. Foi recusada e corrigida desligando o auto-commit, mantendo como único commit o `commitSync()` explícito, chamado só depois que todas as republicações da leva já haviam sido confirmadas — a equipe preferiu essa garantia mesmo sem o pedido original ter especificado esse detalhe.
+
+### Interação 6 — Chave de partição e evidência da Aula 04
+
+**O que foi pedido:** adaptar a entrega ao problema de agregação por cliente em ambiente com múltiplas instâncias, documentar a janela usada e registrar uma decisão sobre repartition.
+
+**O que a IA sugeriu:** escolher `clienteId` como chave do fluxo de agregação,
+usando um repartition topic, e validar a concorrência com duas instâncias do
+agregador. A análise também recomendou conferir o contrato antes de implementar um listener de repartição que preserve corpo e headers CloudEvents.
+
+**O que foi aceito:** o ADR-003 registra `clienteId` como decisão arquitetural
+para consultas por cliente e explicita os custos de um serviço, um tópico, uma
+passagem extra, idempotência e partição quente. Também foi aceito o teste com
+duas instâncias independentes do serviço atual, que confirma a contagem correta na mesma janela e a deduplicação por `eventoId`. A documentação da Aula 04
+registra, de forma verificável, que a implementação atual é tumbling window de
+15 minutos por prioridade e usa `ocorridoEm` como event time.
+
+**O que foi recusado, e por quê:**
+
+- **Implementar imediatamente o repartitionador com `clienteId`:** recusado
+  porque o contrato atual não possui esse campo. Descobrir a chave por
+  desserialização e recriar o evento mudaria o desenho exigido de preservar
+  corpo e headers intactos; inventar uma chave fora do contrato produziria uma
+  implementação que parece completa, mas não atende ao domínio real. A equipe
+  preferiu documentar a decisão, exigir a evolução backward-compatible do
+  contrato e deixar a implementação para quando houver uma fonte legítima de
+  `clienteId`.
+- **Declarar que já existe session window por cliente:** recusado porque o
+  código existente implementa tumbling window por prioridade. A documentação
+  mantém essa distinção para que a evidência de teste não seja maior que o
+  comportamento realmente executado.

@@ -37,8 +37,12 @@ services:
       context: ./servico-agendamentos
     environment:
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/agendamentos
+      - SPRING_DATASOURCE_USERNAME=user
+      - SPRING_DATASOURCE_PASSWORD=pass
     depends_on:
       - kafka
+      - postgres
     ports:
       - "8080:8080"
 
