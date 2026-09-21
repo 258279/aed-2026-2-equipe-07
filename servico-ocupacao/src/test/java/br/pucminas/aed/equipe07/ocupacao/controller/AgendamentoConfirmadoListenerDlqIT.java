@@ -6,6 +6,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,7 +91,12 @@ class AgendamentoConfirmadoListenerDlqIT {
         String json = """
                 {"eventoId":"EVT-DLQ-001","agendamentoId":"AG-DLQ-001","profissionalId":"PROF-001","inicioEm":"2026-09-01T10:00:00-03:00"}""";
 
-        kafkaTemplate.send("salao.agendamento-confirmado", "AG-DLQ-001", json);
+        ProducerRecord<Object, Object> registroOriginal =
+                new ProducerRecord<>("salao.agendamento-confirmado", "AG-DLQ-001", json);
+        registroOriginal.headers().add("ce_id", "EVT-DLQ-001".getBytes(StandardCharsets.UTF_8));
+        registroOriginal.headers().add("ce_type", "salao.agendamento.confirmado.v1".getBytes(StandardCharsets.UTF_8));
+
+        kafkaTemplate.send(registroOriginal);
 
         Consumer<String, String> consumidorDlq =
                 criarConsumidor("teste-dlq-ocupacao", "salao.agendamento-confirmado.dlq.servico-ocupacao");
@@ -102,6 +109,8 @@ class AgendamentoConfirmadoListenerDlqIT {
 
         assertNotNull(registro);
         assertEquals(json, registro.value());
+        assertEquals("EVT-DLQ-001", headerAsString(registro, "ce_id"));
+        assertNotNull(registro.headers().lastHeader("kafka_dlt-exception-message"));
 
         Mockito.verify(ocupacaoService, Mockito.times(4)).processar(Mockito.any());
 
@@ -169,4 +178,8 @@ class AgendamentoConfirmadoListenerDlqIT {
 
         return consumer;
     }
+
+        private String headerAsString(ConsumerRecord<String, String> registro, String nome) {
+                return new String(registro.headers().lastHeader(nome).value(), StandardCharsets.UTF_8);
+        }
 }

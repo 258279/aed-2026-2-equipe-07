@@ -95,3 +95,30 @@ consegue drenar de uma vez, chame de novo até a resposta vir com `0`.
 
 Esse endpoint não tem autenticação — é uma superfície de administração para uso local/operacional,
 não algo pra expor assim num ambiente real.
+
+## Saga de compensação por conflito de horário
+
+Quando o `servico-ocupacao` recebe uma confirmação para um horário já ocupado pelo mesmo
+profissional, ele publica um novo evento de compensação (fato no particípio):
+
+- tópico: `salao.agendamento-cancelado-por-conflito`
+- tipo CloudEvents: `salao.agendamento.cancelado-por-conflito.v1`
+
+O `servico-agendamentos` consome esse evento e atualiza a projeção de status para
+`CANCELADO_POR_CONFLITO`.
+
+Consulta de status observável:
+
+```bash
+curl http://localhost:8080/agendamentos/AG-EXEMPLO-001/status
+```
+
+Resposta:
+
+```json
+{"agendamentoId":"AG-EXEMPLO-001","status":"CANCELADO_POR_CONFLITO"}
+```
+
+Falha da própria compensação usa o mesmo padrão de resiliência (retry 1s/2s/4s e DLQ própria):
+
+- `salao.agendamento-cancelado-por-conflito.dlq.servico-agendamentos-compensacao`

@@ -21,15 +21,18 @@ public class AgendamentoService {
 
     private final KafkaTemplate<String, AgendamentoConfirmadoEvent> clienteDoBroker;
     private final AgendamentoEventStore eventStore;
+    private final AgendamentoStatusService statusService;
     private final JsonMapper jsonMapper;
 
     public AgendamentoService(
             KafkaTemplate<String, AgendamentoConfirmadoEvent> clienteDoBroker,
             AgendamentoEventStore eventStore,
+            AgendamentoStatusService statusService,
             JsonMapper jsonMapper) {
 
         this.clienteDoBroker = clienteDoBroker;
         this.eventStore = eventStore;
+        this.statusService = statusService;
         this.jsonMapper = jsonMapper;
     }
 
@@ -45,6 +48,8 @@ public class AgendamentoService {
                         evento.getOcorridoEm()
                 )
         ));
+
+        statusService.marcarConfirmado(evento.getAgendamentoId());
 
         RecordHeaders headers = new RecordHeaders();
 

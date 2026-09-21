@@ -57,4 +57,26 @@ public class OcupacaoRepository {
                 inicioEm
         );
     }
+
+    public boolean existeConflitoDeHorario(
+            String profissionalId,
+            String inicioEm,
+            String agendamentoId) {
+
+        Integer quantidade = banco.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM projecao_ocupacao
+                WHERE profissional_id = ?
+                  AND inicio_em = ?
+                  AND agendamento_id <> ?
+                """,
+                Integer.class,
+                profissionalId,
+                inicioEm,
+                agendamentoId
+        );
+
+        return quantidade != null && quantidade > 0;
+    }
 }

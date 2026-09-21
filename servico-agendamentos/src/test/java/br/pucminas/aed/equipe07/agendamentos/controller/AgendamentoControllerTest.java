@@ -3,6 +3,7 @@ package br.pucminas.aed.equipe07.agendamentos.controller;
 import br.pucminas.aed.equipe07.agendamentos.domain.AgendamentoConfirmadoEvent;
 import br.pucminas.aed.equipe07.agendamentos.service.AgendamentoCicloDeVidaService;
 import br.pucminas.aed.equipe07.agendamentos.service.AgendamentoService;
+import br.pucminas.aed.equipe07.agendamentos.service.AgendamentoStatusService;
 import br.pucminas.aed.equipe07.agendamentos.service.ConflitoDeVersaoException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -16,7 +17,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class AgendamentoControllerTest {
@@ -25,10 +29,11 @@ class AgendamentoControllerTest {
     void deveResponderAcceptedAoDispararConfirmacao() {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
         AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service, cicloDeVidaService);
+                new AgendamentoController(service, statusService, cicloDeVidaService);
 
         AgendamentoConfirmadoEvent evento =
                 new AgendamentoConfirmadoEvent(
@@ -46,10 +51,11 @@ class AgendamentoControllerTest {
     void deveReceberConfirmacaoPorHttpEResponderAccepted() throws Exception {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
         AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service, cicloDeVidaService);
+                new AgendamentoController(service, statusService, cicloDeVidaService);
 
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
 
@@ -85,10 +91,11 @@ class AgendamentoControllerTest {
     void deveResponderOkAoCancelarComSucesso() {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
         AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service, cicloDeVidaService);
+                new AgendamentoController(service, statusService, cicloDeVidaService);
 
         ResponseEntity<Void> resposta = controller.cancelar("AG-001");
 
@@ -100,13 +107,14 @@ class AgendamentoControllerTest {
     void deveResponderConflictAoCancelarUmAgendamentoEmEstadoInvalido() {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
         AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         doThrow(new IllegalStateException("já cancelado"))
                 .when(cicloDeVidaService).cancelar("AG-002");
 
         AgendamentoController controller =
-                new AgendamentoController(service, cicloDeVidaService);
+                new AgendamentoController(service, statusService, cicloDeVidaService);
 
         ResponseEntity<Void> resposta = controller.cancelar("AG-002");
 
@@ -117,13 +125,14 @@ class AgendamentoControllerTest {
     void deveResponderConflictAoCancelarComConflitoDeVersao() {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
         AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         doThrow(new ConflitoDeVersaoException("conflito", null))
                 .when(cicloDeVidaService).cancelar("AG-003");
 
         AgendamentoController controller =
-                new AgendamentoController(service, cicloDeVidaService);
+                new AgendamentoController(service, statusService, cicloDeVidaService);
 
         ResponseEntity<Void> resposta = controller.cancelar("AG-003");
 
@@ -134,14 +143,39 @@ class AgendamentoControllerTest {
     void deveResponderOkAoMarcarNaoComparecimentoComSucesso() {
 
         AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
         AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
 
         AgendamentoController controller =
-                new AgendamentoController(service, cicloDeVidaService);
+                new AgendamentoController(service, statusService, cicloDeVidaService);
 
         ResponseEntity<Void> resposta = controller.marcarNaoComparecimento("AG-004");
 
         assertEquals(HttpStatus.OK, resposta.getStatusCode());
         verify(cicloDeVidaService).marcarNaoComparecimento("AG-004");
+    }
+
+    @Test
+    void deveConsultarStatusAtualDoAgendamento() throws Exception {
+
+        AgendamentoService service = mock(AgendamentoService.class);
+        AgendamentoStatusService statusService = mock(AgendamentoStatusService.class);
+        AgendamentoCicloDeVidaService cicloDeVidaService = mock(AgendamentoCicloDeVidaService.class);
+
+        when(statusService.consultarStatus("AG-777")).thenReturn("CANCELADO_POR_CONFLITO");
+
+        AgendamentoController controller =
+                new AgendamentoController(service, statusService, cicloDeVidaService);
+
+        MockMvc mockMvc =
+                MockMvcBuilders
+                        .standaloneSetup(controller)
+                        .build();
+
+        mockMvc.perform(get("/agendamentos/AG-777/status"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"agendamentoId":"AG-777","status":"CANCELADO_POR_CONFLITO"}
+                        """));
     }
 }
