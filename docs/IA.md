@@ -279,3 +279,66 @@ registra, de forma verificável, que a implementação atual é tumbling window 
   código existente implementa tumbling window por prioridade. A documentação
   mantém essa distinção para que a evidência de teste não seja maior que o
   comportamento realmente executado.
+
+---
+
+## Aula 05
+
+### Interação 7 — Contraditório: razões contra Event Sourcing no agregado Agendamento
+
+**O que foi pedido:** simular um contraditório, pedindo deliberadamente à IA para listar
+razões CONTRA a decisão de usar Event Sourcing no agregado Agendamento, antes de fechar a
+implementação.
+
+**O que a IA apontou contra a decisão:**
+
+- O volume real do domínio é baixíssimo (no máximo 3 eventos por agendamento: Confirmado,
+  e depois Cancelado+SinalEstornado ou NaoCompareceu+MultaCobrada). Event Sourcing costuma
+  compensar quando o histórico é longo ou consultado com frequência; para 3 eventos, um log
+  de auditoria simples ao lado de uma tabela de estado tradicional resolveria a
+  rastreabilidade sem o custo de reconstruir estado por fold.
+- A curva de aprendizado da equipe é um custo pago imediatamente, enquanto o benefício
+  (auditoria robusta numa disputa sobre prazo) só se manifesta se esse cenário realmente
+  acontecer.
+- A complexidade de LGPD com crypto-shredding introduz gestão de chave por cliente que não
+  existiria com um UPDATE simples mais um campo `anonimizado_em`.
+
+**O que foi aceito:** o reconhecimento de que o volume atual não justificaria Event Sourcing
+sozinho — por isso a decisão foi mantida restrita a um único agregado, e não expandida para
+o resto do sistema, como já registra a ADR-005.
+
+**O que foi recusado, e por quê:** a alternativa de log de auditoria separado foi recusada
+mesmo com o argumento de menor esforço, porque ela cria duas fontes de verdade (o log e o
+estado gravado) que podem divergir sem nada forçar consistência entre elas — esse é
+justamente o problema que motivou a ADR-005. O baixo volume atual não elimina o risco de
+divergência, só o torna menos visível. A equipe decidiu que um caminho de exceção com
+implicação financeira (estorno de sinal, cobrança de multa) exige uma única fonte de
+verdade, mesmo com o custo de curva de aprendizado maior.
+
+---
+
+## Aula 06
+
+### Interação 8 — Pergunta-armadilha: como corrigir um evento de compensação já publicado?
+
+**O que foi pedido:** pedir deliberadamente à IA uma sugestão para um cenário clássico de
+erro nesta aula: "publicamos o evento `AgendamentoCanceladoPorConflitoEvent` com o
+`agendamentoId` errado, como eu corrijo isso?"
+
+**O que a IA sugeriu:** a resposta inicial sugeriu fazer um UPDATE direto no registro já
+gravado (ou, alternativamente, apagar e republicar o evento com o mesmo `ce_id`),
+argumentando que seria mais simples do que criar um novo tipo de evento só para uma
+correção pontual.
+
+**O que foi aceito:** nada da sugestão inicial foi aceito da forma como veio.
+
+**O que foi recusado, e por quê:** UPDATE/DELETE num evento já publicado quebra a regra
+central do desenho de resiliência do projeto: consumidores já processaram (e possivelmente
+já compensaram) esse evento, e alterar o passado silenciosamente pode deixar reprocessamentos
+futuros inconsistentes sem que nenhum consumidor perceba — o log deixaria de ser uma fonte
+confiável do que realmente aconteceu, a mesma razão pela qual a Saga já usa eventos de
+compensação em vez de UPDATE no agregado (ADR-006). Reaproveitar o `ce_id` original também
+quebraria a deduplicação por idempotência de quem já consumiu o evento errado. A equipe
+recusou as duas sugestões e decidiu que a correção correta é publicar um novo evento (ex.: um
+evento de correção referenciando o `ce_id` original como causa), preservando o histórico
+completo — inclusive do erro e da correção — como registro imutável.
